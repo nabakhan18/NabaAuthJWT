@@ -7,32 +7,64 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
+use Illuminate\Http\JsonResponse;
 
 class AuthController extends Controller
 {
     // Register
-    public function register(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6'
-        ]);
+public function register(Request $request)
+{
+    // Manually trim and sanitize email
+    $request->merge([
+        'email' => trim($request->email),
+    ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password)
-        ]);
-
-        $token = JWTAuth::fromUser($user);
-
+    // Check if user already exists
+    if (User::where('email', $request->email)->exists()) {
         return response()->json([
-            'user' => $user,
-            'token' => $token
-        ]);
+            'message' => 'User already registered.'
+        ], 409); // 409 = Conflict
     }
 
+    // Validation rules
+    $validator = validator::make($request->all(), [
+        'name' => 'required|string|max:255',
+        'email' => [
+            'required',
+            'email',
+            'regex:/^[^\s@]+@[^\s@]+\.[^\s@]+$/',
+        ],
+        'password' => 'required|string|min:8',
+    ], [
+        'email.regex' => 'The email must not contain spaces.',
+        'email.email' => 'The email format is invalid.',
+        'password.min' => 'The password must be at least 8 characters.',
+    ]);
+
+    // Handle failed validation
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'We cant register, correct your format',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    // Create user
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->email,
+        'password' => bcrypt($request->password),
+    ]);
+
+    return response()->json([
+        'message' => 'User registered successfully.',
+        'user' => $user,
+    ], 201);
+}
     // Login
     public function login(Request $request)
     {
@@ -47,15 +79,42 @@ class AuthController extends Controller
         ]);
     }
 
-    // Logout
-    public function logout()
-    {
-        JWTAuth::invalidate(JWTAuth::getToken());
+public function logout(Request $request)
+{
+    try {
+        $token = JWTAuth::getToken();
+
+        // If no token was sent at all
+        if (!$token) {
+            return response()->json([
+                'message' => 'Token not provided.'
+            ], 400);
+        }
+
+        // Invalidate the token (logout)
+        JWTAuth::invalidate($token);
 
         return response()->json([
-            'message' => 'Successfully logged out'
-        ]);
+            'message' => 'Successfully logged out.'
+        ], 200);
+
+    } catch (TokenExpiredException $e) {
+        return response()->json([
+            'message' => 'Token has already expired.'
+        ], 401);
+
+    } catch (TokenInvalidException $e) {
+        return response()->json([
+            'message' => 'Token is invalid.'
+        ], 401);
+
+    } catch (JWTException $e) {
+        return response()->json([
+            'message' => 'Could not log out. Something went wrong with the token.'
+        ], 500);
     }
+}
+
 
     // Refresh token
     public function refresh()
@@ -68,8 +127,16 @@ class AuthController extends Controller
     }
 
     // Get current user
-    public function me()
+public function me()
 {
-    return response()->json(Auth::guard('api')->user());
+    $user = Auth::guard('api')->user();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'Unauthenticated. Token is missing, invalid, or expired.'
+        ], 401); // 401 Unauthorized
+    }
+
+    return response()->json($user);
 }
 }

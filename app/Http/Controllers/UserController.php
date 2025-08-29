@@ -36,10 +36,10 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'full_name'     => 'required|string|max:40|min:3|',
+            'name'     => 'required|string|max:40|min:3|',
             'email'    => 'required|string|unique:users',
             // 'password'    => 'required|string|',
-            'ref_id'    => 'required|string|',
+            // 'ref_id'    => 'required|string|',
             'password' => 'required|string|min:6',
         ]);
         // $validator = Validator::make($request->all(), [
@@ -51,10 +51,10 @@ class UserController extends Controller
             return response()->json($validator->errors(), 422);
         }
         $User = User::create([
-            'full_name'     => $request->full_name,
+            'name'     => $request->name,
             'email'    => $request->email,
             // 'password'    => $request->password,
-            'ref_id'    => $request->ref_id,
+            // 'ref_id'    => $request->ref_id,
             'password' => Hash::make($request->password),
             // 'is_active' => $request->is_active,
         ]);
@@ -115,10 +115,10 @@ class UserController extends Controller
     {
         // $this->authorizeUser();
         $validator = Validator::make($request->all(), [
-            'full_name'     => 'required|string|max:255',
+            'name'     => 'required|string|max:255',
             'email'    => 'required|email',
             'password' => 'required|string|min:6',
-            'ref_id' => 'required|string',
+            // 'ref_id' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -136,10 +136,10 @@ class UserController extends Controller
         //     $request->replace($request->except('password'));
         // }
         // $user->update($request->all());
-        $user->full_name = $request->full_name;
+        $user->name = $request->name;
         $user->email = $request->email;
         $user->password = $request->password;
-        $user->ref_id = $request->ref_id;
+        // $user->ref_id = $request->ref_id;
         $user->update();
         return response()->json($user, 200);
     }
